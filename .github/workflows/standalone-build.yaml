@@ -1,0 +1,97 @@
+---
+name: Standalone Build
+
+on:
+  push:
+    branches: ["main", "dev"]
+  pull_request:
+    branches: ["dev"]
+  workflow_dispatch:
+
+defaults:
+  run:
+    shell: cmd
+
+env:
+  ARTIFACT: openterfaceQT-standalone.exe
+  SOURCE_DIR: ${{ github.workspace }}
+  QT_VERSION: 6.5.3 
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+jobs:
+  build:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+
+      - name: Cache Qt Build
+        id: cache-qt
+        uses: actions/cache@v3
+        with:
+            path: ${{ runner.temp }}/Qt6
+            key: qt-6.5.3-mingw-windows-static
+            restore-keys: |
+              qt-6.5.3-mingw-windows-static
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install Build environment
+        if: steps.cache-qt.outputs.cache-hit != 'true'
+        run: |
+          choco install mingw -y
+          choco install ninja -y
+          echo "Setting up PATH for MinGW and Ninja"
+          set PATH=C:\ProgramData\chocolatey\bin;%PATH%
+          g++ --version || (echo "g++ installation failed. Please check the installation." && exit 1)
+
+      - name: Build Qt Statically
+        if: steps.cache-qt.outputs.cache-hit != 'true'
+        run: |
+          call docker/build-static-qt-from-source.bat
+
+      - name: Create build directory
+        run: |
+          mkdir ${{ runner.temp }}\build
+           
+
+    #   - name: Build Standalone Executable
+    #     working-directory: ${{ runner.temp }}\build
+    #     run: |
+    #       echo "Building with qmake..."
+    #       set PATH=${{ runner.temp }}\Qt6\${{ env.QT_VERSION }}\mingw_64\bin;${{ runner.temp }}\Qt6\Tools\mingw1120_64\bin;%PATH%
+
+    #       qmake -r ${{ env.SOURCE_DIR }}\openterfaceQT.pro
+    #       if errorlevel 1 exit /b 1
+          
+    #       echo "Building with mingw32-make..."
+    #       mingw32-make -j2
+    #       if errorlevel 1 exit /b 1
+          
+    #       if not exist release\openterfaceQT.exe (
+    #         echo "Error: Failed to build openterfaceQT.exe"
+    #         exit 1
+    #       )
+          
+    #       echo "Creating standalone package..."
+    #       mkdir package
+    #       copy release\openterfaceQT.exe package
+
+    #       echo "Copying platform plugins..."
+    #       mkdir platforms
+    #       copy D:/a/_temp/Qt/6.5.3/mingw_64/plugins/platforms/qwindows.dll platforms
+
+    #       echo "Running windeployqt for standalone build..."
+    #       cd package
+    #       windeployqt --qmldir ${{ env.SOURCE_DIR }} openterfaceQT.exe --compiler-runtime
+          
+    #   - name: Save build artifact
+    #     uses: actions/upload-artifact@v4
+    #     with:
+    #       name: ${{ env.ARTIFACT }}
+    #       path: ${{ runner.temp }}\build\package\openterfaceQT.exe
+    #       if-no-files-found: error 
